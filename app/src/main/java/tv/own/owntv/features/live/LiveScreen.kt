@@ -73,6 +73,8 @@ import tv.own.owntv.features.settings.SettingsViewModel
 import tv.own.owntv.core.settings.PanelSection
 import tv.own.owntv.features.settings.data.computePanelWidths
 import tv.own.owntv.features.settings.rememberPanelShares
+import tv.own.owntv.features.shell.components.VodLanguageMenu
+import tv.own.owntv.features.shell.components.VodLanguageTool
 import tv.own.owntv.features.shell.components.RailCategoryMenu
 import tv.own.owntv.ui.components.MoveOrderOverlay
 import tv.own.owntv.ui.components.chNavPaging
@@ -244,6 +246,10 @@ fun LiveScreen(
     // back to that exact row. Held as a key, not an index: a Move changes the row's position.
     var contextCategoryKey by remember { mutableStateOf<LiveKey?>(null) }
     var railFocusRow by remember { mutableStateOf<Int?>(null) }
+    val selectedLanguage by vm.selectedLanguage.collectAsStateWithLifecycle()
+    val availableLanguages by vm.availableLanguages.collectAsStateWithLifecycle()
+    var languageOpen by remember { mutableStateOf(false) }
+    val languageFocus = remember { FocusRequester() }
     // The channel the "Move to category…" flow is moving, with the origin captured at
     // menu-open time (the rail can't change under the modal, but capturing is still safer).
     var moveItem by remember { mutableStateOf<ChannelEntity?>(null) }
@@ -740,6 +746,9 @@ fun LiveScreen(
                             // ◀ Categories from the search field too, as from the rows (not while typing — a search that found nothing here may be in another category).
                             .onDpadLeft({ !searchEditing && lockedKey == null }) { openCategories() },
                     )
+                    if (availableLanguages.isNotEmpty()) {
+                        VodLanguageTool(selectedLanguage, Modifier.focusRequester(languageFocus)) { languageOpen = true }
+                    }
                     tv.own.owntv.ui.stage.StageTool(
                         text = null,
                         icon = OwnTVIcon.SORT,
@@ -1153,6 +1162,17 @@ fun LiveScreen(
         if (listPin.takeClose(opened)) Unit
         else if (opened && categoriesOpen) { categoriesOpen = false; focusChannelList(); listPin.openedFromCategories() }
         else railFocusRow = railItems.indexOfFirst { it.key == key }.takeIf { it >= 0 }
+    }
+
+    if (languageOpen) {
+        VodLanguageMenu(
+            languages = availableLanguages,
+            current = selectedLanguage,
+            x = if (separate) 500f else 300f,
+            top = 186.mpx,
+            onPick = vm::setLanguage,
+            onDismiss = { languageOpen = false; runCatching { languageFocus.requestFocus() } },
+        )
     }
 }
 

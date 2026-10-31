@@ -174,7 +174,7 @@ jobs:
             # Dev (non-tag) builds mirror the local-build fallback in app/build.gradle.kts:
             # pinned HIGH so a dev APK always installs over any published release
             # (no INSTALL_FAILED_VERSION_DOWNGRADE) and the in-app updater stays quiet.
-            NAME="99.99.99"
+            NAME="5.2.1-prnwork"
             CODE=99999
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"

@@ -77,6 +77,7 @@ import tv.own.owntv.core.database.entity.FavoriteEntity
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.database.entity.WatchHistoryEntity
 import tv.own.owntv.core.launcher.LauncherIntegrationRepository
+import tv.own.owntv.features.shell.components.M3uLanguageFilter
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.util.throttleLatest
 import tv.own.owntv.core.model.SourceType
@@ -574,8 +575,33 @@ class LiveViewModel(
     private val custResolved: StateFlow<CustState?> = combine(customOnceRead, hiddenCategoryIds) { c, h -> c?.let { CustState(it, h) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val railItems: StateFlow<List<LiveRailItem>> = ctx
+    private val _selectedLanguage = MutableStateFlow<String?>(null)
+    val selectedLanguage: StateFlow<String?> = _selectedLanguage.asStateFlow()
+
+    fun setLanguage(lang: String?) {
+        _selectedLanguage.value = lang
+    }
+
+    val availableLanguages: StateFlow<List<String>> = ctx
         .flatMapLatest { c ->
+            if (c.profileId < 0) flowOf(emptyList())
+            else categoryDao.observe(c.sourceIds, MediaType.LIVE).map { cats ->
+                M3uLanguageFilter.extractAvailableLanguages(cats.map { it.name })
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val categoryNamesById: StateFlow<Map<Long, String>> = ctx
+        .flatMapLatest { c ->
+            if (c.profileId < 0) flowOf(emptyMap())
+            else categoryDao.observe(c.sourceIds, MediaType.LIVE).map { cats ->
+                cats.associate { it.id to it.name }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val railItems: StateFlow<List<LiveRailItem>> = combine(ctx, _selectedLanguage) { c, lang -> c to lang }
+        .flatMapLatest { (c, lang) ->
             if (c.profileId < 0) flowOf(defaultRail)
             else combine(
                 categoryDao.observe(c.sourceIds, MediaType.LIVE),
@@ -596,7 +622,11 @@ class LiveViewModel(
                 )
                 val multiSourceNames = c.sourceNames.takeIf { it.size > 1 }.orEmpty()
                 val categoriesById = cats.associateBy { it.id }
-                railWithCatchup(catchupCount > 0) + folders.map { e ->
+                val filteredFolders = if (lang == null) folders else folders.filter { e ->
+                    val catName = e.categoryId?.let { categoriesById[it]?.name } ?: e.displayName
+                    M3uLanguageFilter.matchesLanguage(catName, null, lang)
+                }
+                railWithCatchup(catchupCount > 0) + filteredFolders.map { e ->
                     LiveRailItem(
                         key = e.categoryId?.let { LiveKey.Folder(it) } ?: LiveKey.Custom(e.customId!!),
                         title = e.displayName, locked = e.locked, sealed = e.sealed,
@@ -616,11 +646,12 @@ class LiveViewModel(
         _search.map { it.trim() }.debounce(300).distinctUntilChanged(),
         sortMode,
         custResolved.filterNotNull(),
-    ) { key, c, query, sort, cs -> Args(key, c, query, sort, cs) }
+        _selectedLanguage,
+    ) { key, c, query, sort, cs, lang -> Args(key, c, query, sort, cs, lang) }
         // Rebuild the pager when a folder gains/loses manual order: the fast-path plain
         // PagingSource doesn't observe content_order, so the switch must recreate it.
         .combine(orderedContexts) { args, _ -> args }
-        .flatMapLatest { (key, c, query, sort, cs) ->
+        .flatMapLatest { (key, c, query, sort, cs, lang) ->
             // Customizations are applied to each fresh PagingData inside the pager chain — a PagingData
             // that the UI already collected must never be re-transformed (Paging forbids re-collection,
             // which is why hiding a channel used to crash). A customization change re-creates the pager.
@@ -630,9 +661,11 @@ class LiveViewModel(
                 val cust = cs.cust
                 val hiddenCats = cs.hiddenCats
                 val movedFrom = cust.movedFromOrigin
-                if (cust.hiddenItems.isEmpty() && cust.itemNames.isEmpty() && hiddenCats.isEmpty() && movedFrom.isEmpty() && cust.sealedCategories.isEmpty()) paging
+                if (cust.hiddenItems.isEmpty() && cust.itemNames.isEmpty() && hiddenCats.isEmpty() && movedFrom.isEmpty() && cust.sealedCategories.isEmpty() && lang == null) paging
                 else paging
                     .filter { ch ->
+                        val catName = ch.categoryId?.let { categoryNamesById.value[it] }
+                        (lang == null || M3uLanguageFilter.matchesLanguage(catName, ch.name, lang)) &&
                         isChannelVisible(ch, cust, hiddenCats, key) &&
                             // Moved-out items leave ONLY their origin folder (they stay in All/search).
                             (movedFrom[CustomizeKeys.channel(ch)]?.let { origin ->
@@ -644,7 +677,7 @@ class LiveViewModel(
         }
         .cachedIn(viewModelScope)
 
-    private data class Args(val key: LiveKey, val ctx: Ctx, val query: String, val sort: SettingsRepository.SortMode, val cs: CustState)
+    private data class Args(val key: LiveKey, val ctx: Ctx, val query: String, val sort: SettingsRepository.SortMode, val cs: CustState, val lang: String?)
 
     /** Hide the focused channel from all lists (undo via Settings → Customize → Hidden channels). */
     fun hideChannel(channel: ChannelEntity) {

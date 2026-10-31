@@ -27,6 +27,8 @@ import tv.own.owntv.features.shell.components.VodGroupWatch
 import tv.own.owntv.features.shell.components.VodHeader
 import tv.own.owntv.features.shell.components.VodHero
 import tv.own.owntv.features.shell.components.VodListRow
+import tv.own.owntv.features.shell.components.VodLanguageMenu
+import tv.own.owntv.features.shell.components.VodLanguageTool
 import tv.own.owntv.features.shell.components.VodOptionsMenu
 import tv.own.owntv.features.shell.components.VodPosterArt
 import tv.own.owntv.features.shell.components.VodSortMenu
@@ -274,6 +276,10 @@ fun MoviesScreen(
     var sheetHadFocus by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     val sortFocus = remember { FocusRequester() }
+    val selectedLanguage by vm.selectedLanguage.collectAsStateWithLifecycle()
+    val availableLanguages by vm.availableLanguages.collectAsStateWithLifecycle()
+    var languageOpen by remember { mutableStateOf(false) }
+    val languageFocus = remember { FocusRequester() }
     val categoriesVisible = lockedKey == null && (!cinematic || categoriesOpen)
     val railCounts by (if (categoriesVisible) vm.railCounts else remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<LiveKey, Int>()) })
         .collectAsStateWithLifecycle()
@@ -588,6 +594,9 @@ fun MoviesScreen(
                             onEditingChange = { searchEditing = it },
                         )
                         VodSortTool(sortMode, Modifier.focusRequester(sortFocus)) { sortOpen = true }
+                        if (availableLanguages.isNotEmpty()) {
+                            VodLanguageTool(selectedLanguage, Modifier.focusRequester(languageFocus)) { languageOpen = true }
+                        }
                         StageTool(text = stringResource(R.string.content_category_browser_title), icon = OwnTVIcon.LIST, onClick = { categoriesOpen = true })
                         Spacer(Modifier.weight(1f))
                         StageKeyHints(listOf(playHint, optionsHint, "◀" to stringResource(R.string.content_category_browser_title)))
@@ -701,6 +710,9 @@ fun MoviesScreen(
                         onEditingChange = { searchEditing = it },
                     )
                     StageTool(text = null, icon = OwnTVIcon.SORT, value = vodSortLabel(sortMode), trailingIcon = OwnTVIcon.CHEVRON_DOWN, onClick = { sortOpen = true }, modifier = Modifier.focusRequester(sortFocus))
+                    if (availableLanguages.isNotEmpty()) {
+                        VodLanguageTool(selectedLanguage, Modifier.focusRequester(languageFocus)) { languageOpen = true }
+                    }
                     StageSegmented(
                         options = listOf(stringResource(R.string.settings_view_grid), stringResource(R.string.settings_view_list)),
                         selected = if (viewMode == SettingsRepository.VodViewMode.LIST) 1 else 0,
@@ -858,6 +870,17 @@ fun MoviesScreen(
             x = if (cinematic) 470f else 880f, top = if (cinematic) 250.mpx else 186.mpx,
             onPick = vm::setSort,
             onDismiss = { sortOpen = false; runCatching { sortFocus.requestFocus() } },
+        )
+    }
+
+    if (languageOpen) {
+        VodLanguageMenu(
+            languages = availableLanguages,
+            current = selectedLanguage,
+            x = if (cinematic) 520f else 880f,
+            top = if (cinematic) 250.mpx else 186.mpx,
+            onPick = vm::setLanguage,
+            onDismiss = { languageOpen = false; runCatching { languageFocus.requestFocus() } },
         )
     }
 

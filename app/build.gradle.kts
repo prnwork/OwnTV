@@ -55,7 +55,7 @@ android {
         // CI injects VERSION_NAME from the git tag for releases. The fallback is only ever used by
         // LOCAL builds (i.e. debug), so we pin it to 99.99.99 — that way a dev build is always "newer"
         // than any published release and the in-app updater never offers an "update" while developing.
-        versionName = System.getenv("VERSION_NAME") ?: "99.99.99"
+        versionName = System.getenv("VERSION_NAME") ?: "5.2.1-prnwork"
 
         // Opt-in local diagnostic APKs keep the rolling playback trace enabled even when they are
         // release-signed (so they can update an installed production build without changing its data).

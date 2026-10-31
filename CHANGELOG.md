@@ -7,6 +7,11 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v5.2.1-prnwork — 2026-10-31
+
+### ✨ New features
+- **🌐 Language filter: Dropdown beside Categories in Live TV, Movies, and Series (by @prnwork)**
+
 ## Unreleased
 
 ### ✨ New features

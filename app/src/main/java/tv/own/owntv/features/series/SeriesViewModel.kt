@@ -74,6 +74,7 @@ import tv.own.owntv.core.repository.EpisodeLoad
 import tv.own.owntv.core.repository.SeriesRepository
 import tv.own.owntv.core.storage.StorageAccess
 import tv.own.owntv.core.storage.MediaFolders
+import tv.own.owntv.features.shell.components.M3uLanguageFilter
 import tv.own.owntv.features.customize.MoveTarget
 import tv.own.owntv.core.customize.CategoryRestorePlan
 import tv.own.owntv.core.customize.planCategoryRestore
@@ -489,8 +490,33 @@ class SeriesViewModel(
         }
     }
 
-    val railItems: StateFlow<List<LiveRailItem>> = ctx
+    private val _selectedLanguage = MutableStateFlow<String?>(null)
+    val selectedLanguage: StateFlow<String?> = _selectedLanguage.asStateFlow()
+
+    fun setLanguage(lang: String?) {
+        _selectedLanguage.value = lang
+    }
+
+    val availableLanguages: StateFlow<List<String>> = ctx
         .flatMapLatest { c ->
+            if (c.profileId < 0) flowOf(emptyList())
+            else categoryDao.observe(c.sourceIds, MediaType.SERIES).map { cats ->
+                M3uLanguageFilter.extractAvailableLanguages(cats.map { it.name })
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val categoryNamesById: StateFlow<Map<Long, String>> = ctx
+        .flatMapLatest { c ->
+            if (c.profileId < 0) flowOf(emptyMap())
+            else categoryDao.observe(c.sourceIds, MediaType.SERIES).map { cats ->
+                cats.associate { it.id to it.name }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val railItems: StateFlow<List<LiveRailItem>> = combine(ctx, _selectedLanguage) { c, lang -> c to lang }
+        .flatMapLatest { (c, lang) ->
             if (c.profileId < 0) flowOf(defaultRail)
             else combine(
                 categoryDao.observe(c.sourceIds, MediaType.SERIES),
@@ -508,7 +534,11 @@ class SeriesViewModel(
                 )
                 val multiSourceNames = c.sourceNames.takeIf { it.size > 1 }.orEmpty()
                 val categoriesById = cats.associateBy { it.id }
-                defaultRail + folders.map { e ->
+                val filteredFolders = if (lang == null) folders else folders.filter { e ->
+                    val catName = e.categoryId?.let { categoriesById[it]?.name } ?: e.displayName
+                    M3uLanguageFilter.matchesLanguage(catName, null, lang)
+                }
+                defaultRail + filteredFolders.map { e ->
                     LiveRailItem(
                         key = e.categoryId?.let { LiveKey.Folder(it) } ?: LiveKey.Custom(e.customId!!),
                         title = e.displayName, locked = e.locked, sealed = e.sealed,
@@ -525,7 +555,8 @@ class SeriesViewModel(
 
     val series: Flow<PagingData<SeriesEntity>> = combine(
         _selected, ctx, _search.map { it.trim() }.debounce(300).distinctUntilChanged(), sortMode, _listRefresh,
-    ) { key, c, query, sort, _ -> Args(key, c, query, sort) }
+        _selectedLanguage,
+    ) { key, c, query, sort, _, lang -> Args(key, c, query, sort, lang) }
         .combine(custResolved.filterNotNull()) { args, cs -> args to cs }
         // Rebuild the pager when a folder gains/loses manual order: the fast-path plain
         // PagingSource doesn't observe content_order, so the switch must recreate it.
@@ -538,8 +569,11 @@ class SeriesViewModel(
             }.flow.map { paging ->
                 val cust = cs.cust
                 val movedFrom = cust.movedFromOrigin
-                if (cust.hiddenItems.isEmpty() && cust.itemNames.isEmpty() && cs.hiddenCats.isEmpty() && movedFrom.isEmpty() && cust.sealedCategories.isEmpty()) paging
+                val lang = args.lang
+                if (cust.hiddenItems.isEmpty() && cust.itemNames.isEmpty() && cs.hiddenCats.isEmpty() && movedFrom.isEmpty() && cust.sealedCategories.isEmpty() && lang == null) paging
                 else paging.filter { s ->
+                    val catName = s.categoryId?.let { categoryNamesById.value[it] }
+                    (lang == null || M3uLanguageFilter.matchesLanguage(catName, s.name, lang)) &&
                     CustomizeKeys.series(s) !in cust.hiddenItems && !cust.seals(args.key) && !cust.sealsItemIn(s.categoryId) &&
                         (s.categoryId == null || s.categoryId !in cs.hiddenCats) &&
                         // Moved-out items leave ONLY their origin folder (they stay in All/search).
@@ -554,7 +588,7 @@ class SeriesViewModel(
         }
         .cachedIn(viewModelScope)
 
-    private data class Args(val key: LiveKey, val ctx: Ctx, val query: String, val sort: SettingsRepository.SortMode)
+    private data class Args(val key: LiveKey, val ctx: Ctx, val query: String, val sort: SettingsRepository.SortMode, val lang: String?)
 
     val count: StateFlow<Int> = combine(_selected, ctx, hiddenCategoryIds, sealedCategoryIds) { key, c, hidden, sealed -> countFlow(key, c, hidden, sealed) }
         .flatMapLatest { it.throttleLatest() } // Cap live COUNT re-runs during bulk sync
