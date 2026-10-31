@@ -454,8 +454,8 @@ class MovieViewModel(
 
     val movies: Flow<PagingData<MovieEntity>> = combine(
         _selected, ctx, _search.map { it.trim() }.debounce(300).distinctUntilChanged(), sortMode, _listRefresh,
-        _selectedLanguage,
-    ) { key, c, query, sort, _, lang -> Args(key, c, query, sort, lang) }
+    ) { key, c, query, sort, _ -> Args(key, c, query, sort, null) }
+        .combine(_selectedLanguage) { args, lang -> args.copy(lang = lang) }
         .combine(custResolved.filterNotNull()) { args, cs -> args to cs }
         // Rebuild the pager when a folder gains/loses manual order: the fast-path plain
         // PagingSource doesn't observe content_order, so the switch must recreate it.

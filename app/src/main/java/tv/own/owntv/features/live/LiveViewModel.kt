@@ -646,8 +646,8 @@ class LiveViewModel(
         _search.map { it.trim() }.debounce(300).distinctUntilChanged(),
         sortMode,
         custResolved.filterNotNull(),
-        _selectedLanguage,
-    ) { key, c, query, sort, cs, lang -> Args(key, c, query, sort, cs, lang) }
+    ) { key, c, query, sort, cs -> Args(key, c, query, sort, cs, null) }
+        .combine(_selectedLanguage) { args, lang -> args.copy(lang = lang) }
         // Rebuild the pager when a folder gains/loses manual order: the fast-path plain
         // PagingSource doesn't observe content_order, so the switch must recreate it.
         .combine(orderedContexts) { args, _ -> args }
