@@ -97,6 +97,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ahXN00/OwnTV_Core
+          ref: 38f30e6768bab28bddf3c2a6847788ccfb84358e
           path: core-repo
 
       - name: Configure composite core build
@@ -159,6 +160,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ahXN00/OwnTV_Core
+          ref: 38f30e6768bab28bddf3c2a6847788ccfb84358e
           path: core-repo
 
       - name: Configure composite core build
