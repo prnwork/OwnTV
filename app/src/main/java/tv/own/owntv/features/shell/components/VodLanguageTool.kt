@@ -10,7 +10,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import tv.own.owntv.R
 import tv.own.owntv.ui.components.OwnTVIcon
-import tv.own.owntv.ui.stage.GuideMenuHost
+import tv.own.owntv.features.epg.GuideMenuHost
 import tv.own.owntv.ui.stage.StageMenuHeader
 import tv.own.owntv.ui.stage.StageMenuItem
 import tv.own.owntv.ui.stage.StageTool
