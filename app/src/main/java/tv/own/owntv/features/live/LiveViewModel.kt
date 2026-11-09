@@ -624,7 +624,8 @@ class LiveViewModel(
                 val categoriesById = cats.associateBy { it.id }
                 val filteredFolders = if (lang == null) folders else folders.filter { e ->
                     val catName = e.categoryId?.let { categoriesById[it]?.name } ?: e.displayName
-                    M3uLanguageFilter.matchesLanguage(catName, null, lang)
+                    val detected = M3uLanguageFilter.detectLanguage(catName, null)
+                    detected == null || detected.equals(lang, ignoreCase = true)
                 }
                 railWithCatchup(catchupCount > 0) + filteredFolders.map { e ->
                     LiveRailItem(
@@ -665,7 +666,7 @@ class LiveViewModel(
                 else paging
                     .filter { ch ->
                         val catName = ch.categoryId?.let { categoryNamesById.value[it] }
-                        (lang == null || M3uLanguageFilter.matchesLanguage(catName, ch.name, lang)) &&
+                        (lang == null || M3uLanguageFilter.matchesLanguage(catName, ch.name, ch.epgChannelId, lang)) &&
                         isChannelVisible(ch, cust, hiddenCats, key) &&
                             // Moved-out items leave ONLY their origin folder (they stay in All/search).
                             (movedFrom[CustomizeKeys.channel(ch)]?.let { origin ->
